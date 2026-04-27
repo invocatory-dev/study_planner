@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Check, Plus, Trash2, Calendar, Target, X, RotateCcw, Settings, Palette, Type,
   Image as ImageIcon, BookOpen, ArrowLeft, Star, Volume2, Gamepad2, Pencil,
@@ -25,6 +25,9 @@ export default function App() {
   const [palette, setPalette] = useState('pastel'); // 색상 팔레트
   const [font, setFont] = useState('handwritten'); // 글꼴
   const [page, setPage] = useState('planner'); // 'planner' | 'vocab'
+
+  // 터치 드래그 추적용
+  const touchStartRef = useRef(null); // { x, y, key }
 
   // 데이터 로드
   useEffect(() => {
@@ -404,29 +407,31 @@ export default function App() {
         </div>
 
         {/* Date & D-Day */}
-        <div className="grid grid-cols-2 gap-6 mb-6">
-          <div className="flex items-center gap-3">
+        <div className="flex gap-4 mb-6 items-center">
+          {/* Date - 자동 너비 (내용만큼만) */}
+          <div className="flex items-center gap-2 flex-shrink-0">
             <Calendar className="w-5 h-5 flex-shrink-0" style={{ color: currentTheme.accentText }} />
-            <div className="flex items-center gap-2 px-5 py-2 rounded-full flex-1" style={{ backgroundColor: currentTheme.accent }}>
-              <span className="text-lg font-bold" style={{ color: currentTheme.accentText }}>Date)</span>
+            <div className="flex items-center gap-2 px-5 py-2 rounded-full" style={{ backgroundColor: currentTheme.accent }}>
+              <span className="text-lg font-bold whitespace-nowrap" style={{ color: currentTheme.accentText }}>Date)</span>
               <span
-                className="flex-1 text-lg"
+                className="text-lg whitespace-nowrap"
                 style={{ fontFamily: currentFont.body, color: currentTheme.accentText }}
               >
                 {today}
               </span>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          {/* D-Day - 남은 공간 차지 */}
+          <div className="flex items-center gap-2 flex-1 min-w-0">
             <Target className="w-5 h-5 flex-shrink-0" style={{ color: currentTheme.accentText }} />
-            <div className="flex items-center gap-2 px-5 py-2 rounded-full flex-1" style={{ backgroundColor: currentTheme.accent }}>
-              <span className="text-lg font-bold" style={{ color: currentTheme.accentText }}>D-DAY)</span>
+            <div className="flex items-center gap-2 px-5 py-2 rounded-full flex-1 min-w-0" style={{ backgroundColor: currentTheme.accent }}>
+              <span className="text-lg font-bold flex-shrink-0" style={{ color: currentTheme.accentText }}>D-DAY)</span>
               <input
                 type="text"
                 value={dDay}
                 onChange={(e) => setDDay(e.target.value)}
                 placeholder="목표를 입력하세요"
-                className="flex-1 bg-transparent text-lg focus:outline-none placeholder-indigo-300"
+                className="flex-1 min-w-0 bg-transparent text-lg focus:outline-none placeholder-indigo-300"
                 style={{ fontFamily: currentFont.body, color: currentTheme.accentText }}
               />
             </div>
@@ -662,17 +667,33 @@ export default function App() {
                         }}
                         onTouchStart={(e) => {
                           e.preventDefault();
+                          const touch = e.touches[0];
+                          touchStartRef.current = {
+                            x: touch.clientX,
+                            y: touch.clientY,
+                            key: key
+                          };
                           setIsDragging(true);
                           handleCellInteraction(hour, slot, true);
                         }}
                         onTouchMove={(e) => {
                           e.preventDefault();
                           const touch = e.touches[0];
+                          const start = touchStartRef.current;
+                          if (!start) return;
+                          // 작은 움직임은 무시 (10px 이하)
+                          const dx = Math.abs(touch.clientX - start.x);
+                          const dy = Math.abs(touch.clientY - start.y);
+                          if (dx < 10 && dy < 10) return;
+                          // 손가락 위치의 셀 찾기
                           const el = document.elementFromPoint(touch.clientX, touch.clientY);
-                          if (el?.dataset?.cellKey) {
+                          if (el?.dataset?.cellKey && el.dataset.cellKey !== start.key) {
                             const [h, s] = el.dataset.cellKey.split('-').map(Number);
                             handleCellInteraction(h, s);
                           }
+                        }}
+                        onTouchEnd={() => {
+                          touchStartRef.current = null;
                         }}
                         data-cell-key={key}
                         className="h-8 cursor-pointer transition-colors"
