@@ -15,6 +15,7 @@ export default function App() {
   const [isDragging, setIsDragging] = useState(false);
   const [dragMode, setDragMode] = useState('add');
   const [editingCategory, setEditingCategory] = useState(null);
+  const [editingItem, setEditingItem] = useState(null);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [editingBlock, setEditingBlock] = useState(null);
   const [confirmReset, setConfirmReset] = useState(null); // 'todo' | 'timetable' | null
@@ -170,7 +171,7 @@ export default function App() {
       if (c.id === categoryId) {
         return {
           ...c,
-          items: c.items.map(i => i.id === itemId ? { ...i, text, isNew: false } : i)
+          items: c.items.map(i => i.id === itemId ? { ...i, text } : i)
         };
       }
       return c;
@@ -204,6 +205,7 @@ export default function App() {
     if (isStart) {
       const current = timeTable[key];
       if (current?.color === selectedColor) {
+        // 같은 색이면 지우기
         setDragMode('remove');
         setTimeTable(prev => {
           const next = { ...prev };
@@ -211,20 +213,25 @@ export default function App() {
           return next;
         });
       } else {
+        // 빈 칸이거나 다른 색이면 현재 색으로 칠하기
         setDragMode('add');
         setTimeTable(prev => ({
           ...prev,
-          [key]: { color: selectedColor, label: prev[key]?.label || '' }
+          [key]: { color: selectedColor, label: '' }
         }));
       }
     } else if (isDragging) {
       if (dragMode === 'add') {
-        setTimeTable(prev => ({
-          ...prev,
-          [key]: { color: selectedColor, label: prev[key]?.label || '' }
-        }));
+        setTimeTable(prev => {
+          // 드래그 중일 때 같은 색이면 그대로 두고, 다른 색/빈칸이면 덮어쓰기
+          const cur = prev[key];
+          if (cur?.color === selectedColor) return prev;
+          return { ...prev, [key]: { color: selectedColor, label: '' } };
+        });
       } else {
         setTimeTable(prev => {
+          // remove 모드일 때는 같은 색만 지우기
+          if (prev[key]?.color !== selectedColor) return prev;
           const next = { ...prev };
           delete next[key];
           return next;
@@ -464,7 +471,11 @@ export default function App() {
                         value={cat.title}
                         onChange={(e) => updateCategoryTitle(cat.id, e.target.value)}
                         onBlur={() => setEditingCategory(null)}
-                        onKeyDown={(e) => e.key === 'Enter' && setEditingCategory(null)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                            setEditingCategory(null);
+                          }
+                        }}
                         autoFocus
                         className="text-xl text-slate-700 bg-transparent border-b border-slate-300 focus:outline-none focus:border-slate-500 px-1"
                         style={{ fontFamily: '"Gaegu", cursive' }}
@@ -510,19 +521,32 @@ export default function App() {
                         >
                           {item.done && <Check className="w-5 h-5 text-white" strokeWidth={3} />}
                         </button>
-                        {item.isNew || !item.text ? (
+                        {item.isNew || !item.text || editingItem === item.id ? (
                           <input
                             type="text"
                             value={item.text}
                             onChange={(e) => updateItemText(cat.id, item.id, e.target.value)}
                             onBlur={(e) => {
-                              if (!e.target.value.trim()) deleteItem(cat.id, item.id);
-                              else updateItemText(cat.id, item.id, e.target.value);
+                              if (!e.target.value.trim()) {
+                                deleteItem(cat.id, item.id);
+                              } else {
+                                // blur 시점에 isNew를 false로 바꿔서 span 모드로 전환
+                                setCategories(prev => prev.map(c => {
+                                  if (c.id === cat.id) {
+                                    return {
+                                      ...c,
+                                      items: c.items.map(i => i.id === item.id ? { ...i, text: e.target.value, isNew: false } : i)
+                                    };
+                                  }
+                                  return c;
+                                }));
+                              }
+                              setEditingItem(null);
                             }}
                             onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
+                              if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
                                 e.target.blur();
-                                if (e.target.value.trim()) addItem(cat.id);
+                                if (e.target.value.trim() && item.isNew) addItem(cat.id);
                               }
                             }}
                             autoFocus
@@ -532,7 +556,7 @@ export default function App() {
                           />
                         ) : (
                           <span
-                            onClick={() => toggleItem(cat.id, item.id)}
+                            onClick={() => setEditingItem(item.id)}
                             className={`flex-1 text-base cursor-pointer transition ${
                               item.done ? 'line-through opacity-50' : ''
                             }`}
@@ -628,6 +652,14 @@ export default function App() {
                           handleCellInteraction(hour, slot, true);
                         }}
                         onMouseEnter={() => isDragging && handleCellInteraction(hour, slot)}
+                        onDoubleClick={() => {
+                          // 색칠된 셀이면 라벨 편집 모드 켜기
+                          if (timeTable[key]) {
+                            // 이 셀이 속한 블록 찾기
+                            const block = blocks[hour]?.find(b => b.keys.includes(key));
+                            if (block) setEditingBlock(`${hour}-${block.blockId}`);
+                          }
+                        }}
                         onTouchStart={(e) => {
                           e.preventDefault();
                           setIsDragging(true);
@@ -664,18 +696,14 @@ export default function App() {
                     return (
                       <div
                         key={block.blockId}
-                        className="absolute top-0 h-8 flex items-center justify-center px-1 cursor-pointer overflow-hidden rounded-sm"
+                        className="absolute top-0 h-8 flex items-center justify-center px-1 overflow-hidden rounded-sm"
                         style={{
                           left: leftCalc,
                           width: widthCalc,
                           backgroundColor: block.color,
-                          border: '1px solid rgba(0,0,0,0.06)'
-                        }}
-                        onClick={(e) => {
-                          if (!isDragging) {
-                            e.stopPropagation();
-                            setEditingBlock(blockKey);
-                          }
+                          border: '1px solid rgba(0,0,0,0.06)',
+                          // 편집 중이 아닐 때는 클릭/터치 이벤트를 아래 셀로 통과시킴
+                          pointerEvents: isEditing ? 'auto' : 'none'
                         }}
                       >
                         {isEditing ? (
@@ -685,7 +713,9 @@ export default function App() {
                             onChange={(e) => updateBlockLabel(block, e.target.value)}
                             onBlur={() => setEditingBlock(null)}
                             onKeyDown={(e) => {
-                              if (e.key === 'Enter' || e.key === 'Escape') setEditingBlock(null);
+                              if ((e.key === 'Enter' && !e.nativeEvent.isComposing) || e.key === 'Escape') {
+                                setEditingBlock(null);
+                              }
                             }}
                             autoFocus
                             placeholder="과목"
@@ -697,7 +727,7 @@ export default function App() {
                           />
                         ) : (
                           <span
-                            className="text-slate-700 text-sm truncate font-bold"
+                            className="text-slate-700 text-sm truncate font-bold pointer-events-none"
                             style={{ fontFamily: '"Gaegu", cursive' }}
                           >
                             {block.label}
@@ -711,7 +741,7 @@ export default function App() {
             </div>
 
             <p className={`text-xs mt-3 text-center ${currentTheme.dark ? 'text-slate-400' : 'text-slate-400'}`}>
-              💡 드래그로 칠하기 · 색칠된 칸 탭하면 과목 입력 · 같은 색은 자동 병합
+              💡 탭/드래그로 칠하기 · 같은 색을 다시 누르면 지워짐 · 더블탭하면 과목 입력
             </p>
           </div>
         </div>
@@ -1176,7 +1206,9 @@ function VocabularyPage({ onBack, theme, font }) {
                     onChange={(e) => setNewWord({ ...newWord, english: e.target.value })}
                     placeholder="영어 뜻 (선택)"
                     className="px-4 py-3 rounded-xl bg-white text-slate-700 text-lg focus:outline-none focus:ring-2 focus:ring-indigo-300"
-                    onKeyDown={(e) => e.key === 'Enter' && addWord()}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.nativeEvent.isComposing) addWord();
+                    }}
                     style={{ fontFamily: font.body }}
                   />
                 </div>
@@ -1568,7 +1600,9 @@ function WordRow({ word, theme, font, isEditing, onEdit, onCancelEdit, onSave, o
           onChange={(e) => setEdit({ ...edit, english: e.target.value })}
           className="col-span-4 px-3 py-2 rounded-lg bg-white text-slate-700 focus:outline-none"
           style={{ fontFamily: font.body }}
-          onKeyDown={(e) => e.key === 'Enter' && onSave(edit)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.nativeEvent.isComposing) onSave(edit);
+          }}
         />
         <div className="col-span-1 flex gap-1 justify-end">
           <button onClick={() => onSave(edit)} className="w-8 h-8 rounded-full bg-emerald-400 text-white flex items-center justify-center">
