@@ -31,52 +31,46 @@ export default function App() {
 
   // 데이터 로드
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        const result = await window.storage.get('planner-data');
-        if (result?.value) {
-          const data = JSON.parse(result.value);
-          setDDay(data.dDay || '');
-          setMemo(data.memo || '');
-          setCategories(data.categories || getDefaultCategories());
-          if (data.theme) setTheme(data.theme);
-          if (data.palette) setPalette(data.palette);
-          if (data.font) setFont(data.font);
-          // 구버전 호환: 값이 문자열(색상)이면 객체로 변환
-          const tt = data.timeTable || {};
-          const migrated = {};
-          Object.keys(tt).forEach(k => {
-            if (typeof tt[k] === 'string') {
-              migrated[k] = { color: tt[k], label: '' };
-            } else {
-              migrated[k] = tt[k];
-            }
-          });
-          setTimeTable(migrated);
-        } else {
-          setCategories(getDefaultCategories());
-        }
-      } catch (e) {
+    try {
+      const raw = localStorage.getItem('planner-data');
+      if (raw) {
+        const data = JSON.parse(raw);
+        setDDay(data.dDay || '');
+        setMemo(data.memo || '');
+        setCategories(data.categories || getDefaultCategories());
+        if (data.theme) setTheme(data.theme);
+        if (data.palette) setPalette(data.palette);
+        if (data.font) setFont(data.font);
+        // 구버전 호환: 값이 문자열(색상)이면 객체로 변환
+        const tt = data.timeTable || {};
+        const migrated = {};
+        Object.keys(tt).forEach(k => {
+          if (typeof tt[k] === 'string') {
+            migrated[k] = { color: tt[k], label: '' };
+          } else {
+            migrated[k] = tt[k];
+          }
+        });
+        setTimeTable(migrated);
+      } else {
         setCategories(getDefaultCategories());
       }
-      setLoaded(true);
-    };
-    loadData();
+    } catch (e) {
+      setCategories(getDefaultCategories());
+    }
+    setLoaded(true);
   }, []);
 
   // 데이터 저장
   useEffect(() => {
     if (!loaded) return;
-    const save = async () => {
-      try {
-        await window.storage.set('planner-data', JSON.stringify({
-          dDay, memo, categories, timeTable, theme, palette, font
-        }));
-      } catch (e) {
-        console.error('저장 실패', e);
-      }
-    };
-    save();
+    try {
+      localStorage.setItem('planner-data', JSON.stringify({
+        dDay, memo, categories, timeTable, theme, palette, font
+      }));
+    } catch (e) {
+      console.error('저장 실패', e);
+    }
   }, [dDay, memo, categories, timeTable, theme, palette, font, loaded]);
 
   function getTodayString() {
@@ -134,10 +128,16 @@ export default function App() {
 
   // 글꼴 프리셋
   const fonts = {
-    handwritten: { name: '귀여운 손글씨', body: '"Gaegu", cursive',  display: '"Caveat", cursive' },
-    rounded:     { name: '동글동글',     body: '"Jua", sans-serif', display: '"Jua", sans-serif' },
-    cute:        { name: '깔끔한 글씨',   body: '"Gowun Dodum", sans-serif', display: '"Gowun Dodum", sans-serif' },
-    bold:        { name: '또박또박',      body: '"Do Hyeon", sans-serif', display: '"Do Hyeon", sans-serif' },
+    handwritten: { name: '귀여운 손글씨',   body: '"Gaegu", cursive',           display: '"Caveat", cursive' },
+    rounded:     { name: '동글동글',       body: '"Jua", sans-serif',          display: '"Jua", sans-serif' },
+    cute:        { name: '깔끔한 글씨',     body: '"Gowun Dodum", sans-serif',  display: '"Gowun Dodum", sans-serif' },
+    bold:        { name: '또박또박',       body: '"Do Hyeon", sans-serif',     display: '"Do Hyeon", sans-serif' },
+    diary:       { name: '일기장',         body: '"Nanum Pen Script", cursive', display: '"Nanum Pen Script", cursive' },
+    notebook:    { name: '연습장',         body: '"Hi Melody", cursive',       display: '"Hi Melody", cursive' },
+    cute2:       { name: '귀여운 글씨',     body: '"Single Day", cursive',      display: '"Single Day", cursive' },
+    serif:       { name: '책 글씨',         body: '"Nanum Myeongjo", serif',    display: '"Nanum Myeongjo", serif' },
+    modern:      { name: '모던',           body: '"Black Han Sans", sans-serif', display: '"Black Han Sans", sans-serif' },
+    soft:        { name: '말랑말랑',       body: '"Sunflower", sans-serif',    display: '"Sunflower", sans-serif' },
   };
   const currentFont = fonts[font];
 
@@ -330,7 +330,7 @@ export default function App() {
   if (page === 'vocab') {
     return (
       <>
-        <link href="https://fonts.googleapis.com/css2?family=Gaegu:wght@400;700&family=Caveat:wght@400;700&family=Jua&family=Gowun+Dodum&family=Do+Hyeon&display=swap" rel="stylesheet" />
+        <link href="https://fonts.googleapis.com/css2?family=Gaegu:wght@400;700&family=Caveat:wght@400;700&family=Jua&family=Gowun+Dodum&family=Do+Hyeon&family=Nanum+Pen+Script&family=Hi+Melody&family=Single+Day&family=Nanum+Myeongjo:wght@400;700;800&family=Black+Han+Sans&family=Sunflower:wght@300;500;700&display=swap" rel="stylesheet" />
         <VocabularyPage
           onBack={() => setPage('planner')}
           theme={currentTheme}
@@ -352,7 +352,7 @@ export default function App() {
       onMouseLeave={() => setIsDragging(false)}
       onTouchEnd={() => setIsDragging(false)}
     >
-      <link href="https://fonts.googleapis.com/css2?family=Gaegu:wght@400;700&family=Caveat:wght@400;700&family=Jua&family=Gowun+Dodum&family=Do+Hyeon&display=swap" rel="stylesheet" />
+      <link href="https://fonts.googleapis.com/css2?family=Gaegu:wght@400;700&family=Caveat:wght@400;700&family=Jua&family=Gowun+Dodum&family=Do+Hyeon&family=Nanum+Pen+Script&family=Hi+Melody&family=Single+Day&family=Nanum+Myeongjo:wght@400;700;800&family=Black+Han+Sans&family=Sunflower:wght@300;500;700&display=swap" rel="stylesheet" />
 
       <div className="max-w-7xl mx-auto px-6 py-8 lg:px-12 lg:py-10">
         {/* 상단 바: 좌측 설정 + 우측 단어장 */}
@@ -671,7 +671,8 @@ export default function App() {
                           touchStartRef.current = {
                             x: touch.clientX,
                             y: touch.clientY,
-                            key: key
+                            key: key,
+                            dragStarted: false  // 드래그가 실제로 시작됐는지
                           };
                           setIsDragging(true);
                           handleCellInteraction(hour, slot, true);
@@ -681,15 +682,20 @@ export default function App() {
                           const touch = e.touches[0];
                           const start = touchStartRef.current;
                           if (!start) return;
-                          // 작은 움직임은 무시 (10px 이하)
-                          const dx = Math.abs(touch.clientX - start.x);
-                          const dy = Math.abs(touch.clientY - start.y);
-                          if (dx < 10 && dy < 10) return;
+                          // 드래그가 아직 시작되지 않았으면, 충분히 움직였는지 확인
+                          if (!start.dragStarted) {
+                            const dx = Math.abs(touch.clientX - start.x);
+                            const dy = Math.abs(touch.clientY - start.y);
+                            // 30px 이상 움직여야 드래그로 인정 (셀 크기보다 작은 흔들림 무시)
+                            if (dx < 30 && dy < 30) return;
+                            start.dragStarted = true;
+                          }
                           // 손가락 위치의 셀 찾기
                           const el = document.elementFromPoint(touch.clientX, touch.clientY);
                           if (el?.dataset?.cellKey && el.dataset.cellKey !== start.key) {
                             const [h, s] = el.dataset.cellKey.split('-').map(Number);
                             handleCellInteraction(h, s);
+                            start.key = el.dataset.cellKey; // 마지막 셀 갱신
                           }
                         }}
                         onTouchEnd={() => {
@@ -881,14 +887,14 @@ export default function App() {
                   <button
                     key={key}
                     onClick={() => setFont(key)}
-                    className={`p-4 rounded-2xl transition ${
+                    className={`p-3 rounded-2xl transition ${
                       font === key
                         ? 'bg-indigo-50 ring-2 ring-indigo-400'
                         : 'bg-slate-50 hover:bg-slate-100'
                     }`}
                   >
-                    <div className="text-2xl text-slate-800 mb-1" style={{ fontFamily: f.body }}>
-                      가나다라
+                    <div className="text-xl text-slate-800 mb-1 truncate" style={{ fontFamily: f.body }}>
+                      가나다 ABC
                     </div>
                     <div className="text-xs text-slate-500">{f.name}</div>
                   </button>
@@ -966,32 +972,26 @@ function VocabularyPage({ onBack, theme, font }) {
 
   // 데이터 로드
   useEffect(() => {
-    const load = async () => {
-      try {
-        const res = await window.storage.get('vocab-data');
-        if (res?.value) {
-          const data = JSON.parse(res.value);
-          setWords(data.words || []);
-        }
-      } catch (e) {
-        console.error('단어장 로드 실패', e);
+    try {
+      const raw = localStorage.getItem('vocab-data');
+      if (raw) {
+        const data = JSON.parse(raw);
+        setWords(data.words || []);
       }
-      setLoaded(true);
-    };
-    load();
+    } catch (e) {
+      console.error('단어장 로드 실패', e);
+    }
+    setLoaded(true);
   }, []);
 
   // 데이터 저장
   useEffect(() => {
     if (!loaded) return;
-    const save = async () => {
-      try {
-        await window.storage.set('vocab-data', JSON.stringify({ words }));
-      } catch (e) {
-        console.error('저장 실패', e);
-      }
-    };
-    save();
+    try {
+      localStorage.setItem('vocab-data', JSON.stringify({ words }));
+    } catch (e) {
+      console.error('저장 실패', e);
+    }
   }, [words, loaded]);
 
   // ===== 단어 CRUD =====
